@@ -6,6 +6,11 @@
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css"/>
     <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+    <script type="text/javascript">
+      function refreshPage() {
+        location.reload();
+      }
+    </script>
     <title>Questionnaire</title>
     <py-config>
       packages = ["numpy", "pandas", "asyncio"]
@@ -20,7 +25,7 @@
     </div>
     <div class="container d-flex-center">
       <div>
-        <h1 id="pseudo">Which of these would you prioritise?</h1>
+        <h1 id="pseudo">Mana yang lebih penting bagi Anda?</h1>
         <form onsubmit="return false">
           <div class="mb-3">
             <label id="pair" for="pair" class="form-label"></label>
@@ -47,10 +52,20 @@
               </div>
             </div>
           </div>
-          <button type="submit" class="btn btn-primary" py-click="next_pair()">Next</button>
+          <button type="submit" class="btn btn-primary" py-click="next_pair()">Berikutnya</button>
         </form>
+        <div id="warn" class="alert alert-danger mt-3" role="alert" hidden>
+          Mohon pilih salah satu dari opsi di atas.
+        </div>
+        <div id="warn2" class="alert alert-danger" role="alert" hidden>
+          Consistency Ratio yang melebihi 0.1 menunjukkan bahwa perbandingan yang Anda berikan tidak konsisten. Mohon ulangi kembali.
+        </div>
         <div id="result"></div>
+        <button id="reset" type="button" class="btn btn-danger mt-3" onclick="refreshPage()" hidden>Reset</button>
+        <br>
+        <h1 id="res"></h1>
         <div id="promethee"></div>
+        <button id="again" type="button" class="btn btn-primary mt-3" onclick="refreshPage()" hidden>Reset</button>
       </div>
     </div>
     <py-script>
@@ -62,7 +77,7 @@
       from js import document
       from pyodide.http import open_url
 
-      url = "https://raw.githubusercontent.com/abdzufar/abdzufar/main/master_final.csv"
+      url = "https://raw.githubusercontent.com/abdzufar/pyscriptfiles/main/master_final.csv"
       url_content = open_url(url)
       df = pd.read_csv(url_content, delimiter=';')
       df = df.drop(columns=['luas_km','jumlah_penduduk'])
@@ -77,76 +92,13 @@
       i=0
       j=i+1
       finished=False
-      def update_pairwise():
-        for x in range(1,6):
-            if document.querySelector("#option"+str(x)).checked:
-              pairwise.append(float(comparisons[x-1]))
-            document.querySelector("#option"+str(x)).checked=False
+      init=True
 
-      def next_pair():
-        global i,j, finished
-        update_pairwise()
-        if finished==True:
-          document.querySelector("form").hidden=True
-          AHP(pairwise)
-          return
-
-        Element('pair').write(criteria_list[i]+' or '+criteria_list[j])
-        Element('option1label').write('Highly Prefer '+criteria_list[i])
-        Element('option2label').write('Slightly Prefer '+criteria_list[i])
-        Element('option3label').write('Neutral')
-        Element('option4label').write('Slightly Prefer '+criteria_list[j])
-        Element('option5label').write('Highly Prefer '+criteria_list[j])
-        j+=1
-        if i==len(criteria_list)-2 and j==len(criteria_list):
-          i=0
-          j=1
-          finished=True
-          return
-        elif j==len(criteria_list):
-          i+=1
-          j=i+1          
-      
-      def AHP(pairwise):
-        size=len(criteria_list)
-        pairwise_matrix=np.zeros((size,size))
-        counter=0
-        for x in range(len(pairwise_matrix)):
-            for y in range(len(pairwise_matrix)):
-                if x==y:
-                    pairwise_matrix[x,y]=1
-                elif x>y:
-                    pairwise_matrix[x,y]=1/pairwise_matrix[y,x]
-                else:
-                    pairwise_matrix[x,y]=pairwise[counter]
-                    counter+=1
-        
-        eigen=np.zeros(size)
-        for x in range(size):
-            eigen[x]=np.dot(pairwise_matrix[x,:],1/pairwise_matrix.sum(axis=0))/size
-        
-        wsv=np.zeros(size)
-        for x in range(size):
-            wsv[x]=np.dot(pairwise_matrix[x,:],eigen)
-        CI=(wsv.sum()-size)/(size-1)
-        RI=[.52,.89,1.11,1.25,1.35,1.40,1.45,1.49,1.51,1.54,1.56]
-        CR=CI/RI[size-(len(criteria_list)-1)]
-
-        Element('result').element.innerText = "Consistency Ratio: "+str(CR)+"\nWeights: "+str(eigen)+"\npairwise_matrix: "+str(pairwise_matrix)
-        Element('pseudo').write('AHP Result')
-        global weights
-        weights = eigen
-        ranks = promethee(normalize(alternatives, benefit_cost), weights)
-        print(ranks)
-        for i in range(len(ranks)):
-          Element('promethee').element.innerText += alternatives_list[ranks[i]]+": "+str(i)+"\n"
-      next_pair()
-      
       def normalize(x, benefit_cost):
         x = x.astype(float)
         col = x.shape[1]
         for i in range(col):
-          if benefit_cost[i]: 
+          if benefit_cost[i] == 0: 
             x[:, i]=np.max(x[:, i]) - x[:, i] 
           else: 
             x[:, i]=x[:, i] - np.min(x[:, i]) 
@@ -186,6 +138,105 @@
         net_flow = (lf/(num_alternatives-1)) - (ef/(num_alternatives-1))
         #print("nf", net_flow)
         ranks = np.argsort(net_flow)[::-1][:10]
-        return ranks+1
+        return ranks
+
+      def update_pairwise():
+        temp = 0
+        for x in range(1,6):
+          if document.querySelector("#option"+str(x)).checked:
+            temp=float(comparisons[x-1])
+            document.querySelector("#option"+str(x)).checked=False
+        if temp == 0:
+          document.getElementById("warn").hidden = False
+          return False
+        else:
+          pairwise.append(temp)
+          document.getElementById("warn").hidden = True
+          return True
+        
+      def next_pair():
+        global i,j, finished, init
+        if init==True:
+          init=False
+        else:
+          if update_pairwise()==False:
+            return
+        if finished==True:
+          document.querySelector("form").hidden=True
+          AHP(pairwise)
+          return
+        
+        Element('pair').write(criteria_list[i]+' atau '+criteria_list[j])
+        Element('option1label').write(criteria_list[i] + ' jauh lebih penting')
+        Element('option2label').write(criteria_list[i] + ' sedikit lebih penting')
+        Element('option3label').write('Sama penting')
+        Element('option4label').write(criteria_list[j] + ' sedikit lebih penting')
+        Element('option5label').write(criteria_list[j] + ' jauh lebih penting')
+        j+=1
+        if i==len(criteria_list)-2 and j==len(criteria_list):
+          i=0
+          j=1
+          finished=True
+          return
+        elif j==len(criteria_list):
+          i+=1
+          j=i+1          
+      
+      def AHP(pairwise):
+        size=len(criteria_list)
+        pairwise_matrix=np.zeros((size,size))
+        counter=0
+        for x in range(len(pairwise_matrix)):
+            for y in range(len(pairwise_matrix)):
+                if x==y:
+                    pairwise_matrix[x,y]=1
+                elif x>y:
+                    pairwise_matrix[x,y]=1/pairwise_matrix[y,x]
+                else:
+                    pairwise_matrix[x,y]=pairwise[counter]
+                    counter+=1
+        
+        eigen=np.zeros(size)
+        for x in range(size):
+            eigen[x]=np.dot(pairwise_matrix[x,:],1/pairwise_matrix.sum(axis=0))/size
+        
+        wsv=np.zeros(size)
+        for x in range(size):
+            wsv[x]=np.dot(pairwise_matrix[x,:],eigen)
+        CI=(wsv.sum()-size)/(size-1)
+        RI=[.52,.89,1.11,1.25,1.35,1.40,1.45,1.49,1.51,1.54,1.56]
+        CR=CI/RI[size-(len(criteria_list)-1)]
+
+        
+        Element('result').element.innerText = "Consistency Ratio: "+str(CR)+"\nWeights: "+str(eigen)+"\npairwise_matrix: "+str(pairwise_matrix)
+        Element('pseudo').write('Hasil AHP')
+        
+        if CR > 0.1:
+          document.getElementById("warn2").hidden = False
+          document.getElementById("reset").hidden = False
+          document.getElementById("res").hidden = True
+          document.getElementById("promethee").hidden = True
+          document.getElementById("again").hidden = True
+          return
+        
+        global weights
+        weights = eigen
+        sorted_weights = np.argsort(weights)[::-1]
+
+        ranks = promethee(normalize(alternatives, benefit_cost), weights)
+
+        Element('res').write('Hasil PROMETHEE')
+        Element('promethee').element.innerText += "Dengan urutan prioritas sebagai berikut:\n"
+        for i in range(len(sorted_weights)):
+          Element('promethee').element.innerText += str(i+1) +". " +criteria_list[sorted_weights[i]] + "\n"
+        
+        Element('promethee').element.innerText += "\nUrutan alternatif yang direkomendasikan adalah:\n"
+        for i in range(len(ranks)):
+          Element('promethee').element.innerText += "Rank "+str(i+1)+": "+alternatives_list[ranks[i]]+"\n"
+        
+        Element('promethee').element.innerText += "\nKlik tombol di bawah untuk mengulang kembali.\n"
+        document.getElementById("again").hidden = False
+        
+      next_pair()
     </py-script>
   </body>
