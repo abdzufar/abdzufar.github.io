@@ -62,7 +62,7 @@
       from js import document
       from pyodide.http import open_url
 
-      url = "https://raw.githubusercontent.com/abdzufar/pyscriptfiles/main/master_final.csv"
+      url = "https://raw.githubusercontent.com/abdzufar/abdzufar/main/master_final.csv"
       url_content = open_url(url)
       df = pd.read_csv(url_content, delimiter=';')
       df = df.drop(columns=['luas_km','jumlah_penduduk'])
